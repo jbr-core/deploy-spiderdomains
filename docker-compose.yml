@@ -1,0 +1,73 @@
+version: '2'
+
+services:
+  
+  # proxy
+  proxy:
+    image: jwilder/nginx-proxy
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ../proxy/conf.d:/etc/nginx/conf.d
+      - ../proxy/vhost.d:/etc/nginx/vhost.d
+      - ../proxy/html:/usr/share/nginx/html
+      - ../proxy/certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  # certs
+  letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: letsencrypt
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../proxy/certs:/etc/nginx/certs:rw
+    volumes_from:
+      - proxy:rw
+
+  # Gestor de contenedores
+  portainer:
+    image: portainer/portainer
+    container_name: portainer
+    restart: always
+    expose:
+      - 80
+    ports:
+      - 8000:8000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    environment:
+      - VIRTUAL_HOST=portainer.sitio.com, www.portainer.sitio.com
+      - VIRTUAL_PORT=9000
+      - VIRTUAL_NETWORK=proxy-network
+      - LETSENCRYPT_HOST=portainer.sitio.com,www.portainer.sitio.com
+      - LETSENCRYPT_EMAIL=example@gmail.com
+
+  # sitio 
+  app:
+    image: jbracho/pm2-sapper:1.0
+    container_name: app
+    restart: always
+    expose:
+      - 80
+    volumes:
+      - ~/addons-sapper/app/:/usr/src/app/sapperApp/
+      - ../pm2-sapper/:/usr/src/app/
+    environment:
+      - VIRTUAL_HOST=sitio.com, www.sitio.com
+      - VIRTUAL_PORT=3000
+      - VIRTUAL_NETWORK=proxy-network
+      - LETSENCRYPT_HOST=sitio.com,www.sitio.com
+      - LETSENCRYPT_EMAIL=example@gmail.com
+
+networks:
+  default:
+    external:
+      name: proxy-network
+
+volumes:
+   portainer_data:
